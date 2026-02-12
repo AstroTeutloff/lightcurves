@@ -132,9 +132,9 @@ class GeneralLightcurve(BaseLightcurve):
         if not low_warn:
             return
 
-        for band in self.all.groups.keys:
+        for band, data in zip(self.all.groups.keys, self.all.groups):
             try:
-                band_len = len(self[band])
+                band_len = len(data)
             except KeyError:
                 continue
 
