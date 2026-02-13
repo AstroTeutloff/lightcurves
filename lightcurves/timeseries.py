@@ -130,3 +130,56 @@ def barycentric_correction(t_values: t.Time, object_coords: c.SkyCoord) -> t.Tim
 
     t_bjd = t_values + t_values.light_travel_time(object_coords)
     return t_bjd
+
+
+def weighted_binning(
+    phase_start: float, phase_stop: float, bins: int
+) -> tuple[list[int], list[float]]:
+    """
+    Digitizes a phase range into bins, weighted by the length of the phase range.
+
+    Parameters:
+    -----------
+
+        phase_start: float; The beginning of the phase range.
+        phase_stop: float; The end of the phase range. Has to be strictly larger than phase_start.
+        bins: int; Number of bins per full phase (from 0-1)
+
+    Returns:
+    --------
+
+        (covered_bins, bin_weights): (list[int], list[float]); List of bins that are covered by the phase range, and their weights
+    """
+
+    if phase_start > phase_stop:
+        raise ValueError(
+            "End of phase range is smaller or equal to beginning of phase range."
+        )
+
+    # Adjust phase space to bin space
+    phase_bin_start = phase_start * bins
+    phase_bin_stop = phase_stop * bins
+
+    phase_baseline = phase_bin_stop - phase_bin_start
+
+    bin_lowest = int(phase_bin_start)
+    bin_highest = int(phase_bin_stop)
+
+    # If both values are in the same bin, we can exit early.
+    if bin_lowest == bin_highest:
+        return ([bin_lowest], [1.0])
+
+    covered_bins = []
+    bin_weights = []
+
+    for i in range(
+        bin_lowest, bin_highest + 1
+    ):  # NOTE: The +1 maybe needs to go, depending if the last bin will consistently be =0.
+        # Calculate weights per phase bin by checking if the bin edges are nearer than the phase range edges.
+        omega_i = min(phase_bin_stop, i + 1) - max(phase_bin_start, i)
+        w_i = omega_i / phase_baseline
+
+        covered_bins.append(i)
+        bin_weights.append(w_i)
+
+    return (covered_bins, bin_weights)

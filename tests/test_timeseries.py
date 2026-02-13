@@ -65,11 +65,33 @@ class TestTimeseries(unittest.TestCase):
         self.assertEqual(
             jan_1_2000_bary, jan_1_2000 + jan_1_2000.light_travel_time(some_object)
         )
-        print(jan_1_2000_bary, jan_1_2000)
 
         # Unhappy path
         with self.assertRaises(AttributeError):
             ts.barycentric_correction(jan_1_2000_noloc, some_object)
+
+    def test_weighted_binning(self):
+        phase_start = 0.05
+        phase_stop = 0.15
+        bins = 10
+
+        # Happy path
+        covered_bins, weights = ts.weighted_binning(phase_start, phase_stop, bins)
+        self.assertEqual(covered_bins, [0, 1])
+        self.assertEqual(weights, [0.5, 0.5])
+
+        covered_bins, weights = ts.weighted_binning(phase_start, phase_start, bins)
+        self.assertEqual(covered_bins, [0])
+        self.assertEqual(weights, [1.0])
+
+        covered_bins, weights = ts.weighted_binning(phase_start, phase_start + 1, bins)
+        self.assertEqual(covered_bins, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        # Floating point numbers are evil and imprecise
+        self.assertAlmostEqual(sum(weights), 1.0)
+
+        # Unhappy path
+        with self.assertRaises(ValueError):
+            ts.weighted_binning(phase_stop, phase_start, bins)
 
 
 if __name__ == "__main__":
