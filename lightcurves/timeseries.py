@@ -173,9 +173,10 @@ def weighted_binning(
     bin_weights = []
 
     for i in range(
-        bin_lowest, bin_highest + 1
-    ):  # NOTE: The +1 maybe needs to go, depending if the last bin will consistently be =0.
-        # Calculate weights per phase bin by checking if the bin edges are nearer than the phase range edges.
+        bin_lowest, bin_highest
+    ):
+        # Calculate weights per phase bin by checking if the bin edges are
+        # nearer than the phase range edges.
         omega_i = min(phase_bin_stop, i + 1) - max(phase_bin_start, i)
         w_i = omega_i / phase_baseline
 

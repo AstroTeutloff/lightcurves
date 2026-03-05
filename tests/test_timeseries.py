@@ -1,14 +1,14 @@
+import numpy as np
+import astropy.coordinates as c
+import astropy.units as u
+import astropy.time as t
+import lightcurves.timeseries as ts
+import unittest
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-import unittest
-import lightcurves.timeseries as ts
-import astropy.time as t
-import astropy.units as u
-import astropy.coordinates as c
-import numpy as np
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..")))
 
 
 class TestTimeseries(unittest.TestCase):
@@ -63,7 +63,8 @@ class TestTimeseries(unittest.TestCase):
         # Happy path
         jan_1_2000_bary = ts.barycentric_correction(jan_1_2000, some_object)
         self.assertEqual(
-            jan_1_2000_bary, jan_1_2000 + jan_1_2000.light_travel_time(some_object)
+            jan_1_2000_bary, jan_1_2000 +
+            jan_1_2000.light_travel_time(some_object)
         )
 
         # Unhappy path
@@ -76,15 +77,18 @@ class TestTimeseries(unittest.TestCase):
         bins = 10
 
         # Happy path
-        covered_bins, weights = ts.weighted_binning(phase_start, phase_stop, bins)
-        self.assertEqual(covered_bins, [0, 1])
+        covered_bins, weights = ts.weighted_binning(
+            phase_start, phase_stop, bins)
         self.assertEqual(weights, [0.5, 0.5])
+        self.assertEqual(covered_bins, [0, 1])
 
-        covered_bins, weights = ts.weighted_binning(phase_start, phase_start, bins)
+        covered_bins, weights = ts.weighted_binning(
+            phase_start, phase_start, bins)
         self.assertEqual(covered_bins, [0])
         self.assertEqual(weights, [1.0])
 
-        covered_bins, weights = ts.weighted_binning(phase_start, phase_start + 1, bins)
+        covered_bins, weights = ts.weighted_binning(
+            phase_start, phase_start + 1, bins)
         self.assertEqual(covered_bins, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         # Floating point numbers are evil and imprecise
         self.assertAlmostEqual(sum(weights), 1.0)

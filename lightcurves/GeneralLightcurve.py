@@ -92,10 +92,12 @@ class GeneralLightcurve(BaseLightcurve):
         if len_filter == 1:
             filter = len_bright * filter
         elif len_filter != len_bright:
-            raise ValueError("Incompatible lengths of `brightness` and `filter`.")
+            raise ValueError(
+                "Incompatible lengths of `brightness` and `filter`.")
 
         if len_time != len_bright:
-            raise ValueError("Inconsistent lengths of `time` and `brightness`.")
+            raise ValueError(
+                "Inconsistent lengths of `time` and `brightness`.")
         if len_bright != len_bright_unc:
             raise ValueError(
                 "Inconsistent lengths of `brightness` and `brightness_unc`."
@@ -110,7 +112,8 @@ class GeneralLightcurve(BaseLightcurve):
         # Assemble Table
         self.all = QTable(
             data=[time, barycentric_time, brightness, brightness_unc, filter],
-            names=["TIME", "TIME_BARY", "BRIGHTNESS", "BRIGHTNESS_UNC", "FILTER"],
+            names=["TIME", "TIME_BARY", "BRIGHTNESS",
+                   "BRIGHTNESS_UNC", "FILTER"],
             masked=True,
         )
 
@@ -129,6 +132,15 @@ class GeneralLightcurve(BaseLightcurve):
                 data["TIME"][sc.mask] = np.ma.masked
                 data["TIME_BARY"][sc.mask] = np.ma.masked
 
+        if (
+            # This is a messy and ugly way to do it. Please don't look at it
+            # for too long...
+            set([str(k[0]) for k in self.all.groups.keys]) !=
+            set(self.bands_info.keys())
+        ):
+            warn(
+                "`bands_info` does not have the same keys as there are filters." +
+                " Expect the plotting to fail!")
         if not low_warn:
             return
 
@@ -253,7 +265,7 @@ class GeneralLightcurve(BaseLightcurve):
         # Creating the axes object if it is not declared.
         ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
         if bands == "":
-            bands = self.all.groups.keys
+            bands = [band[0] for band in self.all.groups.keys]
 
         for band in bands:
             try:
@@ -280,7 +292,8 @@ class GeneralLightcurve(BaseLightcurve):
             if normalize:
                 # TODO: Calculate Error correctly!!
                 flux = field["BRIGHTNESS"] / np.nanmean(field["BRIGHTNESS"])
-                fluxerr = field["BRIGHTNESS_UNC"] / np.nanmean(field["BRIGHTNESS"])
+                fluxerr = field["BRIGHTNESS_UNC"] / \
+                    np.nanmean(field["BRIGHTNESS"])
             else:
                 flux = field["BRIGHTNESS"]
                 fluxerr = field["BRIGHTNESS_UNC"]
