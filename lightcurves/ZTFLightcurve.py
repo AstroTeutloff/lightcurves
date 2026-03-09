@@ -62,6 +62,9 @@ class ZTFLightcurve(BaseLightcurve):
 
         self.all = lc_data
 
+        # Setting up the bands for easier use
+        self.all = self.all.group_by("filtercode")
+
         # Sigma clipping if wished.
         for band, data in zip(self.all.groups.keys, self.all.groups):
             if sig_clip is not None:
@@ -85,7 +88,8 @@ class ZTFLightcurve(BaseLightcurve):
         )
 
         coords = self.all["coord"] = c.SkyCoord(
-            self.all["ra"], self.all["dec"], unit=(u.degree, u.degree), frame="icrs"
+            self.all["ra"], self.all["dec"], unit=(
+                u.degree, u.degree), frame="icrs"
         )
 
         # Calculating the barycentric correction
@@ -136,7 +140,8 @@ class ZTFLightcurve(BaseLightcurve):
                 + "Please specify band used, or use subset of table."
             )
 
-        ls_obj = LombScargle(data["bjd"], data["mag"], data["magerr"], **ls_kwargs)
+        ls_obj = LombScargle(data["bjd"], data["mag"],
+                             data["magerr"], **ls_kwargs)
 
         return ls_obj
 
@@ -232,11 +237,13 @@ class ZTFLightcurve(BaseLightcurve):
                 continue
 
             # Use the phasefold method from the timeseries package.
-            time_pf = ts.phasefold(field["bjd"], period, t0=np.max(self.all["bjd"]))
+            time_pf = ts.phasefold(
+                field["bjd"], period, t0=np.max(self.all["bjd"]))
 
             # Start plotting
             mag_app = (
-                field["mag"] - np.nanmean(field["mag"]) if normalize else field["mag"]
+                field["mag"] -
+                np.nanmean(field["mag"]) if normalize else field["mag"]
             )
 
             yerr = field["magerr"] if show_uncertainty else None
@@ -444,8 +451,8 @@ class ZTFLightcurve(BaseLightcurve):
             f_grid: u.Quantity; A frequency grid
         """
 
-        return super()._generate_fspace(
-            t=self.all["bjd"],
+        return ts.generate_fspace(
+            t_values=self.all["bjd"],
             f_min=f_min,
             f_max=f_max,
             oversample=oversample,

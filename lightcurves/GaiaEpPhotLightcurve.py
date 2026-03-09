@@ -98,7 +98,8 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
         )
 
         self.all["COORD"] = c.SkyCoord(
-            self.all["RA_ICRS"], self.all["DE_ICRS"], unit=(u.deg, u.deg), frame="icrs"
+            self.all["RA_ICRS"], self.all["DE_ICRS"], unit=(
+                u.deg, u.deg), frame="icrs"
         )
 
         if not low_warn:
@@ -527,7 +528,7 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
         """
 
         return ts.generate_fspace(
-            t=self.all["TimeG"],
+            t_values=self.all["TimeG"],
             f_min=f_min,
             f_max=f_max,
             oversample=oversample,
