@@ -7,12 +7,14 @@ Base Lightcurve package. Specific LC classes inherit from this one.
 """
 
 from abc import ABC, abstractmethod
+from warnings import warn
 
 import matplotlib.axes as axes
 
 from astropy import units as u
 from astropy.table import QTable
 from astropy.timeseries import LombScargle
+from astropy.io.ascii import write
 
 
 class BaseLightcurve(ABC):
@@ -89,3 +91,51 @@ class BaseLightcurve(ABC):
         oversample: float = 1.0,
     ) -> u.Quantity:
         pass
+
+    @classmethod
+    def write_lcurve_file(
+        cls,
+        t_values: u.Quantity,
+        t_exp: u.Quantity,
+        flux_values: u.Quantity,
+        flux_unc: u.Quantity,
+        weight_1: u.Quantity,
+        weight_2: u.Quantity,
+        **write_kwargs
+    ) -> None:
+        """
+        Writes contents of a lightcurve to a file which can be used by lcurve
+        to analyse.
+
+        Parameters:
+        -----------
+
+            t_values: u.Quantity; Values in time- (or phase-) space.
+            t_exp: u.Quantity; Exposure times in the same unit as t_values. If
+                both t_values and t_exp are in time space and have units, the
+                function will handle the conversion by itself!
+            flux_values: u.Quantity; Single band flux values
+            flux_unc: u.Quantity; Flux uncertainties, corresponding to the
+                values for flux_values.
+            weight_1: u.Quantity; Weighting column 1. # TODO: Find out what this is specifically for
+            weight_2: u.Quantity; Weighting column 2. # TODO: Find out what this is specifically for
+            **write_kwargs; Any other keyword arguments passed to the function
+                call are passed into the `astropy.io.ascii.write()` call.
+        """
+
+        try:
+            t_exp = t_exp.to(t_values.unit)
+        except u.UnitConversionError:
+            warn(
+                "Unit conversion Error occured when converting exposure time" +
+                " units to input time units. Be careful with your outputs!"
+            )
+
+        out_table = QTable(
+            [t_values, t_exp, flux_values, flux_unc, weight_1, weight_2],
+            names=["TIME", "T_EXP", "FLUX", "FLUX_UNC", "W1", "W2"]
+        )
+
+        write(table=out_table, **write_kwargs)
+
+        return None
