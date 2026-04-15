@@ -182,7 +182,7 @@ class ZTFLightcurve(BaseLightcurve):
         n_periods: int = 2,
         normalize: bool = True,
         **plot_kwargs,
-    ) -> plt.Axes:
+    ) -> axes.Axes:
         """
         Simple method that plots the phasefolded Lightcurve(s). If you want
         something specific, I recommend to grab the phasefolded lightcurves via
@@ -212,8 +212,7 @@ class ZTFLightcurve(BaseLightcurve):
             plt.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        # Creating the axes object if it is not declared.
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
         # Wrapping band in a list to prevent unwrapping e.g. `zg`.
         if isinstance(bands, str):
@@ -222,7 +221,7 @@ class ZTFLightcurve(BaseLightcurve):
         for band in bands:
             try:
                 # Try to match the input bandname to a dictionary in bands_info (see constructor)
-                d = ZTFLightcurve.BANDS_INFO[band.lower()]
+                band_info = ZTFLightcurve.BANDS_INFO[band.lower()]
             except KeyError as ke:
                 raise KeyError(
                     "Please use only the bands `zg`, `zr`, and/or `zi`!"
@@ -236,10 +235,6 @@ class ZTFLightcurve(BaseLightcurve):
             except KeyError:
                 continue
 
-            # Use the phasefold method from the timeseries package.
-            time_pf = ts.phasefold(
-                field["bjd"], period, t0=np.max(self.all["bjd"]))
-
             # Start plotting
             mag_app = (
                 field["mag"] -
@@ -248,16 +243,18 @@ class ZTFLightcurve(BaseLightcurve):
 
             yerr = field["magerr"] if show_uncertainty else None
 
-            for offset in range(n_periods):
-                ax.errorbar(
-                    time_pf + offset,
-                    mag_app,
-                    yerr=yerr,
-                    label=band,
-                    color=d["color"],
-                    fmt="o",
-                    **plot_kwargs,
-                )
+            ax = super()._plot_band_folded(
+                time=field["bjd"],
+                period=period,
+                t0=np.max(self.all["bjd"]),
+                flux=mag_app,
+                fluxerr=yerr,
+                ax=ax,
+                color=band_info["color"],
+                label=band,
+                n_periods=n_periods,
+                **plot_kwargs
+            )
 
         # Brighter magnitude at the top.
         ax.invert_yaxis()
@@ -270,7 +267,6 @@ class ZTFLightcurve(BaseLightcurve):
         else:
             ylabel = rf"Brightness $m$ [{ZTFLightcurve.FLUX_UNIT}]"
 
-        ax.set_xlabel(r"Phase $\Phi$ [$2\pi$]")
         ax.set_ylabel(ylabel)
 
         return ax
@@ -314,54 +310,24 @@ class ZTFLightcurve(BaseLightcurve):
             plt.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
-        if band in ZTFLightcurve.BANDS_INFO.keys():
-            plot_color = ZTFLightcurve.BANDS_INFO[band]["color"]
-            label_prefix = f"{band.lower()}: "
-        else:
-            plot_color = "k"
-            label_prefix = ""
+        plot_color, label_prefix = super()._periodogram_color_and_labelprefix(
+            band,
+            self.BANDS_INFO
+        )
 
-        # Start plotting
-        ax.step(freq_space, power_space, c=plot_color, **plot_kwargs)
-
-        # Mark the maximum value
-        if mark_maximum:
-            pmax_idx = np.argmax(power_space)
-            ax.scatter(
-                freq_space[pmax_idx],
-                1.1 * power_space[pmax_idx],  # x, y
-                marker="v",
-                c=plot_color,
-                edgecolors="black",  # marker specifications
-                label=label_prefix
-                + r"$f(p_{max})$"
-                + f" = {freq_space[pmax_idx]:.2f}",  # label
-            )
-
-        # Include a False alarm level line
-        if fal is not None:
-            ax.axhline(
-                fal,
-                ls="--",
-                color=plot_color,
-                alpha=0.5,
-            )
-
-        ax.set_xlabel(f"Frequency $f$ [{freq_space.unit}]")
-        ax.set_ylabel(r"Power $p$ [1]")
-        ax.set_xlim(np.min(freq_space).value, np.max(freq_space).value)
-
-        if not draw_period_axis:
-            return ax
-        # Draw second axis at top with Period ticks.
-        ax_top = ax.twiny()
-        ax_top.set_xlim(ax.get_xlim())
-        ticklabels = np.pow(ax.get_xticks() * freq_space.unit, -1).to(u.minute)
-        ax_top.set_xticks(ax.get_xticks())
-        ax_top.set_xticklabels([f"{i:.2f}" for i in ticklabels.value])
-        ax_top.set_xlabel(f"Period $P$ [{ticklabels.unit}]")
+        ax = super()._plot_periodogram(
+            freq_space=freq_space,
+            power_space=power_space,
+            fal=fal,
+            ax=ax,
+            mark_maximum=mark_maximum,
+            draw_period_axis=draw_period_axis,
+            color=plot_color,
+            label_prefix=label_prefix,
+            **plot_kwargs
+        )
 
         return ax
 
@@ -392,12 +358,11 @@ class ZTFLightcurve(BaseLightcurve):
             plt.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
-
+        ax = super()._verify_ax(ax)
         for band in bands:
             try:
                 # Try to match the input bandname to a dictionary in bands_info (see constructor)
-                d = ZTFLightcurve.BANDS_INFO[band.lower()]
+                band_info = ZTFLightcurve.BANDS_INFO[band.lower()]
             except KeyError as ke:
                 raise KeyError(
                     "Please use only the bands `zg`, `zr`, and/or `zi`!"
@@ -408,22 +373,20 @@ class ZTFLightcurve(BaseLightcurve):
                 field = self[band]
             except KeyError:
                 continue
-            n_points = f"{band} ({len(field) - np.count_nonzero(field.mask)} points)"
 
             yerr = field["magerr"] if show_uncertainty else None
 
-            ax.errorbar(
-                field["mjd"].mjd,
-                field["mag"],
-                yerr=yerr,
-                c=d["color"],
-                fmt="o",
-                label=n_points,
-                **plot_kwargs,
+            ax = super()._plot_lightcurve(
+                time=field["bjd"],
+                flux=field["mag"],
+                fluxerr=yerr,
+                ax=ax,
+                color=band_info["color"],
+                label_prefix=band,
+                **plot_kwargs
             )
 
         ax.invert_yaxis()
-
         ax.set_xlabel("Time (BJD) [d]")
         ax.set_ylabel(r"Apparent brightness $m$ [mag]")
 

@@ -112,8 +112,11 @@ class GeneralLightcurve(BaseLightcurve):
         # Assemble Table
         self.all = QTable(
             data=[time, barycentric_time, brightness, brightness_unc, filter],
-            names=["TIME", "TIME_BARY", "BRIGHTNESS",
-                   "BRIGHTNESS_UNC", "FILTER"],
+            names=[
+                "TIME", "TIME_BARY",
+                "BRIGHTNESS", "BRIGHTNESS_UNC",
+                "FILTER"
+            ],
             masked=True,
         )
 
@@ -133,10 +136,10 @@ class GeneralLightcurve(BaseLightcurve):
                 data["TIME_BARY"][sc.mask] = np.ma.masked
 
         if (
-            # This is a messy and ugly way to do it. Please don't look at it
-            # for too long...
-            set([str(k[0]) for k in self.all.groups.keys]) !=
-            set(self.bands_info.keys())
+            # If the set of used filters - the set of filters with color
+            # information is not the emtpy set, warn the user.
+            set([str(k[0]) for k in self.all.groups.keys]) -
+                set(self.bands_info.keys())
         ):
             warn(
                 "`bands_info` does not have the same keys as there are filters." +
@@ -262,8 +265,8 @@ class GeneralLightcurve(BaseLightcurve):
             axes.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        # Creating the axes object if it is not declared.
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
+
         if bands == "":
             bands = [band[0] for band in self.all.groups.keys]
 
@@ -276,18 +279,7 @@ class GeneralLightcurve(BaseLightcurve):
                     f"Please use only the bands {self.all.groups.keys}!"
                 ) from ke
 
-            # This is able to fail, because not all of the Filters will be
-            # available in all of the Lightcurves.
-            try:
-                # If we encouter a keyerror here, skip to next band
-                field = self[band]
-            except KeyError:
-                continue
-
-            time_pf = ts.phasefold(
-                field["TIME_BARY"], period, t0=np.max(self.all["TIME_BARY"])
-            )
-
+            field = self[band]
             # Start plotting
             if normalize:
                 # TODO: Calculate Error correctly!!
@@ -300,23 +292,22 @@ class GeneralLightcurve(BaseLightcurve):
 
             yerr = fluxerr if show_uncertainty else None
 
-            for offset in range(n_periods):
-                ax.errorbar(
-                    time_pf + offset,
-                    flux,
-                    yerr=yerr,
-                    label=band,
-                    color=band_info["color"],
-                    fmt="o",
-                    **plot_kwargs,
-                )
-
+            ax = super()._plot_band_folded(
+                time=field["TIME_BARY"],
+                period=period,
+                t0=np.max(self.all(field["TIME_BARY"])),
+                flux=flux,
+                fluxerr=yerr,
+                ax=ax,
+                color=band_info["color"],
+                n_periods=n_periods,
+                **plot_kwargs
+            )
         if normalize:
             ylabel = r"Mean weighted flux $F/\bar{F}$ [1]"
         else:
             ylabel = "Brightness [TODO: Set unit]"
 
-        ax.set_xlabel(r"Phase $\Phi$ [$2\pi$]")
         ax.set_ylabel(ylabel)
 
         return ax
@@ -357,51 +348,24 @@ class GeneralLightcurve(BaseLightcurve):
             axes.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        plot_color, label_prefix = super()._periodogram_color_and_labelprefix(
+            band,
+            self.bands_info
+        )
 
-        # Draw the periodogram
-        if band in self.bands_info.keys():
-            plot_color = self.bands_info[band]["color"]
-            label_prefix = f"{band.lower()}: "
-        else:
-            plot_color = "k"
-            label_prefix = ""
+        ax = super()._verify_ax(ax)
 
-        ax.step(freq_space, power_space, c=plot_color, **plot_kwargs)
-
-        # Mark the maximum value
-        if mark_maximum:
-            pmax_idx = np.argmax(power_space)
-            ax.scatter(
-                freq_space[pmax_idx],
-                1.1 * power_space[pmax_idx],  # x, y
-                marker="v",
-                c=plot_color,
-                edgecolors="black",  # marker specifications
-                label=label_prefix
-                + r"$f(p_{max})$"
-                + f" = {freq_space[pmax_idx]:.2f}",  # label
-            )
-
-        # Include a False alarm level line
-        if fal is not None:
-            ax.axhline(fal, ls="--", color=plot_color, alpha=0.5)
-
-        ax.set_xlabel(f"Frequency $f$ [{freq_space.unit}]")
-        ax.set_ylabel(r"Power $p$ [1]")
-        ax.set_xlim(np.min(freq_space).value, np.max(freq_space).value)
-
-        # Return early
-        if not draw_period_axis:
-            return ax
-
-        # Draw second axis at top with Period ticks.
-        ax_top = ax.twiny()
-        ax_top.set_xlim(ax.get_xlim())
-        ticklabels = np.pow(ax.get_xticks() * freq_space.unit, -1).to(u.minute)
-        ax_top.set_xticks(ax.get_xticks())
-        ax_top.set_xticklabels([f"{i:.2f}" for i in ticklabels.value])
-        ax_top.set_xlabel(f"Period $P$ [{ticklabels.unit}]")
+        ax = super()._plot_periodogram(
+            freq_space=freq_space,
+            power_space=power_space,
+            fal=fal,
+            ax=ax,
+            mark_maximum=mark_maximum,
+            draw_period_axis=draw_period_axis,
+            color=plot_color,
+            label_prefix=label_prefix,
+            **plot_kwargs
+        )
 
         return ax
 
@@ -429,7 +393,7 @@ class GeneralLightcurve(BaseLightcurve):
             axes.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
         if bands == "":
             bands = self.all.groups.keys
@@ -443,25 +407,17 @@ class GeneralLightcurve(BaseLightcurve):
                     f"Please use only the bands in {self.all.groups.keys}"
                 ) from ke
 
-            # This can fail because not every lightcurve has all Filters worth of data
-            try:
-                # If we encouter a keyerror here, skip to next band
-                field = self[band]
-            except KeyError:
-                continue
-
-            n_points = f"{band} ({len(field) - np.count_nonzero(field['BRIGHTNESS'].mask)} points)"
-
+            field = self[band]
             yerr = field["BRIGHTNESS_UNC"] if show_uncertainty else None
 
-            ax.errorbar(
-                field["TIME"].mjd,
-                field["BRIGHTNESS"],
-                yerr=yerr,
-                c=d["color"],
-                fmt="o",
-                label=n_points,
-                **plot_kwargs,
+            ax = super()._plot_lightcurve(
+                time=field["TIME_BARY"],
+                flux=field["BRIGHTNESS"],
+                fluxerr=yerr,
+                ax=ax,
+                color=d["color"],
+                label_prefix=band
+                ** plot_kwargs
             )
 
         ax.set_xlabel("Time (BJD) [d]")

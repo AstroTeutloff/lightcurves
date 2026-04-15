@@ -10,11 +10,16 @@ from abc import ABC, abstractmethod
 from warnings import warn
 
 import matplotlib.axes as axes
+import matplotlib.pyplot as plt
 
-from astropy import units as u
+from astropy import units as u, time as t
 from astropy.table import QTable
 from astropy.timeseries import LombScargle
 from astropy.io.ascii import write
+
+from lightcurves import timeseries as ts
+
+import numpy as np
 
 
 class BaseLightcurve(ABC):
@@ -60,6 +65,70 @@ class BaseLightcurve(ABC):
     ) -> axes.Axes:
         pass
 
+    @classmethod
+    def _plot_periodogram(
+        cls,
+        freq_space: u.Quantity,
+        power_space: u.Quantity,
+        fal: float | None,
+        ax: axes.Axes,
+        mark_maximum: bool,
+        draw_period_axis: bool,
+        color: str,
+        label_prefix: str,
+        ** plot_kwargs
+    ) -> axes.Axes:
+
+        ax.step(freq_space, power_space, c=color, **plot_kwargs)
+
+        # Mark the maximum value
+        if mark_maximum:
+            pmax_idx = np.argmax(power_space)
+            ax.scatter(
+                freq_space[pmax_idx],
+                1.1 * power_space[pmax_idx],  # x, y
+                marker="v",
+                c=color,
+                edgecolors="black",  # marker specifications
+                label=label_prefix
+                + r"$f(p_{max})$"
+                + f" = {freq_space[pmax_idx]:.2f}",  # label
+            )
+
+        # Include a False alarm level line
+        if fal is not None:
+            ax.axhline(fal, ls="--", color=color, alpha=0.5)
+
+        ax.set_xlabel(f"Frequency $f$ [{freq_space.unit}]")
+        ax.set_ylabel(r"Power $p$ [1]")
+        ax.set_xlim(np.min(freq_space).value, np.max(freq_space).value)
+
+        # Return early
+        if not draw_period_axis:
+            return ax
+
+        # Draw second axis at top with Period ticks.
+        ax_top = ax.twiny()
+        ax_top.set_xlim(ax.get_xlim())
+        ticklabels = np.pow(ax.get_xticks() * freq_space.unit, -1).to(u.minute)
+        ax_top.set_xticks(ax.get_xticks())
+        ax_top.set_xticklabels([f"{i:.2f}" for i in ticklabels.value])
+        ax_top.set_xlabel(f"Period $P$ [{ticklabels.unit}]")
+
+        return ax
+
+    @classmethod
+    def _periodogram_color_and_labelprefix(cls, band, bands_info):
+        if band in bands_info.keys():
+            plot_color = bands_info[band]["color"]
+            label_prefix = f"{band}: "
+        else:
+            # NOTE: Maybe put a warning here.
+            plot_color = "k"
+            label_prefix = ""
+
+        return plot_color, label_prefix
+
     @abstractmethod
     def plot_lightcurve(
         self,
@@ -69,6 +138,31 @@ class BaseLightcurve(ABC):
         **plot_kwargs,
     ) -> axes.Axes:
         pass
+
+    @classmethod
+    def _plot_lightcurve(
+        cls,
+        time: t.Time,
+        flux: u.Quantity,
+        fluxerr: u.Quantity | None,
+        ax: axes.Axes,
+        color: str,
+        label_prefix: str,
+        **plot_kwargs
+    ) -> axes.Axes:
+
+        n_points = f"{label_prefix} ({len(flux) - np.count_nonzero(flux.mask)} points)"
+
+        ax.errorbar(
+            time.mjd,
+            flux,
+            yerr=fluxerr,
+            c=color,
+            fmt="o",
+            label=n_points,
+            **plot_kwargs,
+        )
+        return ax
 
     @abstractmethod
     def plot_folded(
@@ -82,6 +176,34 @@ class BaseLightcurve(ABC):
         **plot_kwargs,
     ) -> axes.Axes:
         pass
+
+    @classmethod
+    def _plot_band_folded(
+        cls,
+        time: t.Time,
+        period: u.Quantity,
+        t0: u.Quantity | t.Time,
+        flux: u.Quantity,
+        fluxerr: u.Quantity | None,
+        ax: axes.Axes,
+        color: str,
+        n_periods: int,
+        **plot_kwargs
+    ) -> axes.Axes:
+
+        phase = ts.phasefold(time, period, t0)
+
+        for offset in range(n_periods):
+            ax.errorbar(
+                phase + offset,
+                flux,
+                yerr=fluxerr,
+                color=color,
+                fmt="o",
+                **plot_kwargs,
+            )
+        ax.set_xlabel(r"Phase $\Phi$ [$2\pi$]")
+        return ax
 
     @abstractmethod
     def generate_fspace(
@@ -139,3 +261,10 @@ class BaseLightcurve(ABC):
         write(table=out_table, **write_kwargs)
 
         return None
+
+    @classmethod
+    def _verify_ax(
+        cls,
+        ax: axes.Axes | None
+    ) -> axes.Axes:
+        return plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax

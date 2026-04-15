@@ -276,8 +276,7 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
             if show_uncertainty = False)
         """
 
-        # Creating the axes object if it is not declared.
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
         # Prevent unwrapping `BP` and `RP` into list of chars.
         if isinstance(bands, str):
@@ -299,10 +298,6 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
             except KeyError:
                 continue
 
-            time_pf = ts.phasefold(
-                field[f"Time{band}"], period, t0=np.max(self.all["TimeG"])
-            )
-
             # Start plotting
             if normalize:
                 # TODO: Calculate Error correctly!!
@@ -314,23 +309,24 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
 
             yerr = fluxerr if show_uncertainty else None
 
-            for offset in range(n_periods):
-                ax.errorbar(
-                    time_pf + offset,
-                    flux,
-                    yerr=yerr,
-                    label=band,
-                    color=band_info["color"],
-                    fmt="o",
-                    **plot_kwargs,
-                )
+            ax = super()._plot_band_folded(
+                time=field[f"Time{band}"],
+                period=period,
+                t0=np.max(self.all["TimeG"]),
+                flux=flux,
+                fluxerr=yerr,
+                ax=ax,
+                color=band_info["color"],
+                label=band,
+                n_periods=n_periods,
+                **plot_kwargs
+            )
 
         if normalize:
             ylabel = r"Mean weighted flux $F/\bar{F}$ [1]"
         else:
             ylabel = rf"Flux $F$[{GaiaEpPhotLightcurve.FLUX_UNIT}]"
 
-        ax.set_xlabel(r"Phase $\Phi$ [$2\pi$]")
         ax.set_ylabel(ylabel)
 
         return ax
@@ -371,56 +367,24 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
             axes.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
-        # Draw the periodogram
-        if band in GaiaEpPhotLightcurve.BANDS_INFO.keys():
-            plot_color = GaiaEpPhotLightcurve.BANDS_INFO[band]["color"]
-            label_prefix = f"{band}: "
-        else:
-            plot_color = "k"
-            label_prefix = ""
+        plot_color, label_prefix = super()._periodogram_color_and_labelprefix(
+            band,
+            self.BANDS_INFO
+        )
 
-        ax.step(freq_space, power_space, c=plot_color, **plot_kwargs)
-
-        # Mark the maximum value
-        if mark_maximum:
-            pmax_idx = np.argmax(power_space)
-            ax.scatter(
-                freq_space[pmax_idx],
-                1.1 * power_space[pmax_idx],  # x, y
-                marker="v",
-                c=plot_color,
-                edgecolors="black",  # marker specifications
-                label=label_prefix
-                + r"$f(p_{max})$"
-                + f" = {freq_space[pmax_idx]:.2f}",  # label
-            )
-
-        # Include a False alarm level line
-        if fal is not None:
-            ax.axhline(
-                fal,
-                ls="--",
-                color=plot_color,
-                alpha=0.5,
-            )
-
-        ax.set_xlabel(f"Frequency $f$ [{freq_space.unit}]")
-        ax.set_ylabel(r"Power $p$ [1]")
-        ax.set_xlim(np.min(freq_space).value, np.max(freq_space).value)
-
-        # Return early
-        if not draw_period_axis:
-            return ax
-
-        # Draw second axis at top with Period ticks.
-        ax_top = ax.twiny()
-        ax_top.set_xlim(ax.get_xlim())
-        ticklabels = np.pow(ax.get_xticks() * freq_space.unit, -1).to(u.minute)
-        ax_top.set_xticks(ax.get_xticks())
-        ax_top.set_xticklabels([f"{i:.2f}" for i in ticklabels.value])
-        ax_top.set_xlabel(f"Period $P$ [{ticklabels.unit}]")
+        ax = super()._plot_periodogram(
+            freq_space=freq_space,
+            power_space=power_space,
+            fal=fal,
+            ax=ax,
+            mark_maximum=mark_maximum,
+            draw_period_axis=draw_period_axis,
+            color=plot_color,
+            label_prefix=label_prefix,
+            **plot_kwargs
+        )
 
         return ax
 
@@ -457,7 +421,7 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
             if show_uncertainty = False)
         """
 
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
         # Prevent unwrapping `BP` and `RP` into list of chars.
         if isinstance(bands, str):
@@ -472,24 +436,17 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
                     "Please use only the bands `G`, `BP`, and/or `RP`!"
                 ) from ke
 
-            # NOTE: Again, this should not fail here anymore.
-            try:
-                # If we encouter a keyerror here, skip to next band
-                field = self[band]
-            except KeyError:
-                continue
-
-            n_points = f"{band} ({len(field) - np.count_nonzero(field.mask)} points)"
+            field = self[band]
 
             yerr = field[f"e_F{band}"] if show_uncertainty else None
 
-            ax.errorbar(
-                field[f"Time{band}"].mjd,
-                field[f"F{band}"],
-                yerr=yerr,
-                c=band_info["color"],
-                fmt="o",
-                label=n_points,
+            ax = super()._plot_lightcurve(
+                time=field[f"Time{band}"],
+                flux=field[f"F{band}"],
+                fluxerr=yerr,
+                ax=ax,
+                cplor=band_info["color"],
+                label_prefix=band,
                 **plot_kwargs,
             )
 

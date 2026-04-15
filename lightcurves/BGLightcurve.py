@@ -67,7 +67,9 @@ class BGLightcurve(BaseLightcurve):
         self.all["FNUERR_OPT"].unit = BGLightcurve.FLUX_UNIT
 
         self.all["MJD_OBS"] = t.Time(
-            self.all["MJD_OBS"], format="mjd", location=BGLightcurve.OBSERVATORY
+            self.all["MJD_OBS"],
+            format="mjd",
+            location=BGLightcurve.OBSERVATORY
         )
 
         self.all["COORD"] = coords = c.SkyCoord(
@@ -75,7 +77,10 @@ class BGLightcurve(BaseLightcurve):
         )
         # Check if BJD times are all there, if not, calculate them.
         if any(np.isnan(self.all["BJD_OBS"])):
-            self.all["BJD_OBS"] = ts.barycentric_correction(self.all["MJD_OBS"], coords)
+            self.all["BJD_OBS"] = ts.barycentric_correction(
+                self.all["MJD_OBS"],
+                coords
+            )
         else:
             self.all["BJD_OBS"] = t.Time(self.all["BJD_OBS"], format="mjd")
 
@@ -216,8 +221,7 @@ class BGLightcurve(BaseLightcurve):
             axes.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        # Creating the axes object if it is not declared.
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
         for band in bands:
             try:
@@ -236,11 +240,6 @@ class BGLightcurve(BaseLightcurve):
             except KeyError:
                 continue
 
-            time_pf = ts.phasefold(
-                field["BJD_OBS"], period, t0=np.max(self.all["BJD_OBS"])
-            )
-
-            # Start plotting
             if normalize:
                 # TODO: Calculate Error correctly!!
                 flux = field["FNU_OPT"] / np.nanmean(field["FNU_OPT"])
@@ -251,23 +250,24 @@ class BGLightcurve(BaseLightcurve):
 
             yerr = fluxerr if show_uncertainty else None
 
-            for offset in range(n_periods):
-                ax.errorbar(
-                    time_pf + offset,
-                    flux,
-                    yerr=yerr,
-                    label=band,
-                    color=band_info["color"],
-                    fmt="o",
-                    **plot_kwargs,
-                )
+            ax = super()._plot_band_folded(
+                time=field["BJD_OBS"],
+                period=period,
+                t0=np.max(self.all["BJD_OBS"]),
+                flux=flux,
+                fluxerr=yerr,
+                ax=ax,
+                color=band_info["color"],
+                label=band,
+                n_periods=n_periods,
+                **plot_kwargs
+            )
 
         if normalize:
             ylabel = r"Mean weighted flux $F/\bar{F}$ [1]"
         else:
             ylabel = rf"Flux $F$[{BGLightcurve.FLUX_UNIT}]"
 
-        ax.set_xlabel(r"Phase $\Phi$ [$2\pi$]")
         ax.set_ylabel(ylabel)
 
         return ax
@@ -308,51 +308,24 @@ class BGLightcurve(BaseLightcurve):
             axes.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
-        # Draw the periodogram
-        if band in BGLightcurve.BANDS_INFO.keys():
-            plot_color = BGLightcurve.BANDS_INFO[band]["color"]
-            label_prefix = f"{band.lower()}: "
-        else:
-            plot_color = "k"
-            label_prefix = ""
+        plot_color, label_prefix = super()._periodogram_color_and_labelprefix(
+            band,
+            self.BANDS_INFO
+        )
 
-        ax.step(freq_space, power_space, c=plot_color, **plot_kwargs)
-
-        # Mark the maximum value
-        if mark_maximum:
-            pmax_idx = np.argmax(power_space)
-            ax.scatter(
-                freq_space[pmax_idx],
-                1.1 * power_space[pmax_idx],  # x, y
-                marker="v",
-                c=plot_color,
-                edgecolors="black",  # marker specifications
-                label=label_prefix
-                + r"$f(p_{max})$"
-                + f" = {freq_space[pmax_idx]:.2f}",  # label
-            )
-
-        # Include a False alarm level line
-        if fal is not None:
-            ax.axhline(fal, ls="--", color=plot_color, alpha=0.5)
-
-        ax.set_xlabel(f"Frequency $f$ [{freq_space.unit}]")
-        ax.set_ylabel(r"Power $p$ [1]")
-        ax.set_xlim(np.min(freq_space).value, np.max(freq_space).value)
-
-        # Return early
-        if not draw_period_axis:
-            return ax
-
-        # Draw second axis at top with Period ticks.
-        ax_top = ax.twiny()
-        ax_top.set_xlim(ax.get_xlim())
-        ticklabels = np.pow(ax.get_xticks() * freq_space.unit, -1).to(u.minute)
-        ax_top.set_xticks(ax.get_xticks())
-        ax_top.set_xticklabels([f"{i:.2f}" for i in ticklabels.value])
-        ax_top.set_xlabel(f"Period $P$ [{ticklabels.unit}]")
+        ax = super()._plot_periodogram(
+            freq_space=freq_space,
+            power_space=power_space,
+            fal=fal,
+            ax=ax,
+            mark_maximum=mark_maximum,
+            draw_period_axis=draw_period_axis,
+            color=plot_color,
+            label_prefix=label_prefix,
+            **plot_kwargs
+        )
 
         return ax
 
@@ -380,12 +353,13 @@ class BGLightcurve(BaseLightcurve):
             axes.Axes; The axes object that was either put in, or created for the plot.
         """
 
-        ax = plt.figure(figsize=(12, 9)).add_subplot(111) if ax is None else ax
+        ax = super()._verify_ax(ax)
 
+        # NOTE: Could bands be a set?
         for band in bands:
             try:
                 # Try to match the input bandname to a dictionary in BANDS_INFO
-                d = BGLightcurve.BANDS_INFO[band.lower()]
+                band_info = BGLightcurve.BANDS_INFO[band.lower()]
             except KeyError as ke:
                 raise KeyError("Please use only the bands in `ugqiz`") from ke
 
@@ -396,22 +370,20 @@ class BGLightcurve(BaseLightcurve):
             except KeyError:
                 continue
 
-            n_points = f"{band} ({len(field) - np.count_nonzero(field['FNU_OPT'].mask)} points)"
-
             yerr = field["FNUERR_OPT"] if show_uncertainty else None
 
-            ax.errorbar(
-                field["MJD_OBS"].mjd,
-                field["FNU_OPT"],
-                yerr=yerr,
-                c=d["color"],
-                fmt="o",
-                label=n_points,
-                **plot_kwargs,
+            ax = super()._plot_lightcurve(
+                time=field["BJD_OBS"],
+                flux=field["FNUERR_OPT"],
+                fluxerr=yerr,
+                ax=ax,
+                color=band_info["color"],
+                label_prefix=band,
+                **plot_kwargs
             )
 
-        ax.set_xlabel("Time (BJD) [d]")
-        ax.set_ylabel(rf"Flux $F$ [{BGLightcurve.FLUX_UNIT}]")
+            ax.set_xlabel("Time (BJD) [d]")
+            ax.set_ylabel(rf"Flux $F$ [{BGLightcurve.FLUX_UNIT}]")
 
         return ax
 
