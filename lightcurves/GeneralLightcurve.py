@@ -17,6 +17,7 @@ from astropy.table import QTable
 from astropy.stats import sigma_clip
 
 import lightcurves.timeseries as ts
+from lightcurves.statistics import statistics
 from lightcurves.BaseLightcurve import BaseLightcurve
 
 
@@ -33,6 +34,7 @@ class GeneralLightcurve(BaseLightcurve):
         brightness: u.Quantity,
         brightness_unc: u.Quantity,
         filter: list[str],
+        t_exposure: u.Quantity = 0*u.second,
         obj_coordinates: c.SkyCoord | None = None,
         do_barycorr: bool = False,
         bands_info: dict = {},
@@ -57,6 +59,9 @@ class GeneralLightcurve(BaseLightcurve):
             filter: list[str]; List of filters, the individual brightnesses are
                 in. The length of `filters` has to be the same as `brightness`,
                 or be 1.
+            t_exposure: u.Quantity | None; (optional) Exposure times in time
+                units. Length has to be the same as `time` or 1. Default
+                is 0 seconds.
             obj_coordinates; c.SkyCoord | None; (optional) Coordinates of the
                 observed object.
             do_barycorr: bool; (optional) Perform a barycentric correction for
@@ -88,6 +93,10 @@ class GeneralLightcurve(BaseLightcurve):
         len_bright = len(brightness)
         len_bright_unc = len(brightness_unc)
         len_filter = len(filter)
+        try:
+            len_t_exp = len(t_exposure)
+        except TypeError:
+            len_t_exp = 1
 
         if len_filter == 1:
             filter = len_bright * filter
@@ -103,6 +112,13 @@ class GeneralLightcurve(BaseLightcurve):
                 "Inconsistent lengths of `brightness` and `brightness_unc`."
             )
 
+        if len_t_exp == 1:
+            t_exposure = np.full(len_time, fill_value=t_exposure)
+        elif len_t_exp != len_time:
+            raise ValueError(
+                "Incompatible lengths of `time` and `t_exposure`."
+            )
+
         # If wanted, perform barycentric correction
         if do_barycorr:
             barycentric_time = ts.barycentric_correction(time, obj_coordinates)
@@ -111,11 +127,13 @@ class GeneralLightcurve(BaseLightcurve):
 
         # Assemble Table
         self.all = QTable(
-            data=[time, barycentric_time, brightness, brightness_unc, filter],
+            data=[time, barycentric_time, brightness,
+                  brightness_unc, filter, t_exposure],
             names=[
                 "TIME", "TIME_BARY",
                 "BRIGHTNESS", "BRIGHTNESS_UNC",
-                "FILTER"
+                "FILTER",
+                "T_EXP"
             ],
             masked=True,
         )
@@ -479,3 +497,24 @@ class GeneralLightcurve(BaseLightcurve):
             f"Filter `{filter_id}` is not available. "
             + f"Available filters are: {[i[0] for i in self.all.groups.keys]}"
         )
+
+    def flux_statistics(
+        self,
+        band: str
+    ) -> (statistics, statistics):
+        """
+        Creates a statistics object for the flux and the flux errors.
+
+        Parameters:
+        -----------
+
+            band: str; Filter band for which the statistics is to be created.
+
+        Returns:
+        --------
+
+            (statistics, statistics); Two statistics objects, one for the flux,
+                one for the flux errors.
+        """
+        band_data = self[band]
+        return statistics(band_data["BRIGHTNESS"]), statistics(band_data["BRIGHTNESS_UNC"])

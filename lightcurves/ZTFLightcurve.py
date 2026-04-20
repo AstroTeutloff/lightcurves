@@ -17,6 +17,7 @@ from astropy.table import QTable
 from astropy.stats import sigma_clip
 
 import lightcurves.timeseries as ts
+from lightcurves.statistics import statistics
 from lightcurves.BaseLightcurve import BaseLightcurve
 
 
@@ -445,3 +446,24 @@ class ZTFLightcurve(BaseLightcurve):
         raise KeyError(
             f"Filter `{filter_id}` is not available. Available filters are: {[i[0] for i in self.all.groups.keys]}"
         )
+
+    def flux_statistics(
+        self,
+        band: str
+    ) -> (statistics, statistics):
+        """
+        Creates a statistics object for the flux and the flux errors.
+
+        Parameters:
+        -----------
+
+            band: str; Filter band for which the statistics is to be created.
+
+        Returns:
+        --------
+
+            (statistics, statistics); Two statistics objects, one for the flux,
+                one for the flux errors.
+        """
+        band_data = self[band]
+        return statistics(band_data["mag"]), statistics(band_data["magerr"])

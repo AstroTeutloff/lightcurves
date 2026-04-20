@@ -18,6 +18,7 @@ from astropy.timeseries import LombScargle
 from astropy.io.ascii import write
 
 from lightcurves import timeseries as ts
+from lightcurves.statistics import statistics
 
 import numpy as np
 
@@ -40,6 +41,13 @@ class BaseLightcurve(ABC):
         low_warn: bool,
         sig_clip: float | None = None,
     ):
+        pass
+
+    @abstractmethod
+    def flux_statistics(
+        self,
+        band: str
+    ) -> (statistics, statistics):
         pass
 
     @classmethod

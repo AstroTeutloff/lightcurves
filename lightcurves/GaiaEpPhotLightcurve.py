@@ -17,6 +17,7 @@ from astropy.table import QTable, vstack
 from astropy.stats import sigma_clip
 
 import lightcurves.timeseries as ts
+from lightcurves.statistics import statistics
 from lightcurves.BaseLightcurve import BaseLightcurve
 
 
@@ -525,3 +526,24 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
         raise KeyError(
             f"Filter `{filter_id}` is not available. Available filters are: `G`, `BP`, `RP`"
         )
+
+    def flux_statistics(
+        self,
+        band: str
+    ) -> (statistics, statistics):
+        """
+        Creates a statistics object for the flux and the flux errors.
+
+        Parameters:
+        -----------
+
+            band: str; Filter band for which the statistics is to be created.
+
+        Returns:
+        --------
+
+            (statistics, statistics); Two statistics objects, one for the flux,
+                one for the flux errors.
+        """
+        band_data = self[band]
+        return statistics(band_data[f"F{band}"]), statistics(band_data[f"e_F{band}"])
