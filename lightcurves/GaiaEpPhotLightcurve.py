@@ -445,7 +445,7 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
                 flux=field[f"F{band}"],
                 fluxerr=yerr,
                 ax=ax,
-                cplor=band_info["color"],
+                color=band_info["color"],
                 label_prefix=band,
                 **plot_kwargs,
             )
