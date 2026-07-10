@@ -15,6 +15,7 @@ from astropy import units as u, coordinates as c, time as t
 from astropy.timeseries import LombScargle, LombScargleMultiband
 from astropy.table import QTable
 from astropy.stats import sigma_clip
+from astropy.utils.masked import Masked
 
 import lightcurves.timeseries as ts
 from lightcurves.statistics import statistics
@@ -127,8 +128,14 @@ class GeneralLightcurve(BaseLightcurve):
 
         # Assemble Table
         self.all = QTable(
-            data=[time, barycentric_time, brightness,
-                  brightness_unc, filter, t_exposure],
+            data=[
+                time,
+                barycentric_time,
+                Masked(brightness),
+                Masked(brightness_unc),
+                filter,
+                t_exposure
+            ],
             names=[
                 "TIME", "TIME_BARY",
                 "BRIGHTNESS", "BRIGHTNESS_UNC",
@@ -142,7 +149,7 @@ class GeneralLightcurve(BaseLightcurve):
         self.all = self.all.group_by("FILTER")
 
         # Sigma clip the data, if wished.
-        for band, data in zip(self.all.groups.keys, self.all.groups):
+        for band, data in zip(self.available_filters(), self.all.groups):
             if sig_clip is not None:
                 sc = sigma_clip(
                     data=data["BRIGHTNESS"].data,
@@ -156,7 +163,7 @@ class GeneralLightcurve(BaseLightcurve):
         if (
             # If the set of used filters - the set of filters with color
             # information is not the emtpy set, warn the user.
-            set([str(k[0]) for k in self.all.groups.keys]) -
+            set([str(k[0]) for k in self.available_filters()]) -
                 set(self.bands_info.keys())
         ):
             warn(
@@ -165,7 +172,7 @@ class GeneralLightcurve(BaseLightcurve):
         if not low_warn:
             return
 
-        for band, data in zip(self.all.groups.keys, self.all.groups):
+        for band, data in zip(self.available_filters(), self.all.groups):
             try:
                 band_len = len(data)
             except KeyError:
@@ -250,6 +257,7 @@ class GeneralLightcurve(BaseLightcurve):
         self,
         period: u.Quantity,
         bands: list | str = "",
+        ephemeris: t.Time | None = None,
         ax: axes.Axes | None = None,
         show_uncertainty: bool = False,
         n_periods: int = 2,
@@ -269,6 +277,9 @@ class GeneralLightcurve(BaseLightcurve):
             bands: list[str] | str; (optional) List of bands that are to be plotted.
                 Alternatively, a string can be used. Syntax is the same, without
                 spaces. By default all bands are plotted.
+            ephemeris: t.Time; (optional) An ephemeris (T_0) zerophase for the
+                phasefold. Default is `None`, then the latest datapoint is
+                taken as the ephemeris.
             ax: axes.Axes object; (optional) The plotting axis to use. If not declared in
                 call, a new figure object is created.
             show_uncertainty: bool; (optional) Whether or not to plot with errorbars.
@@ -286,7 +297,7 @@ class GeneralLightcurve(BaseLightcurve):
         ax = super()._verify_ax(ax)
 
         if bands == "":
-            bands = [band[0] for band in self.all.groups.keys]
+            bands = [band for band in self.available_filters()]
 
         for band in bands:
             try:
@@ -294,7 +305,7 @@ class GeneralLightcurve(BaseLightcurve):
                 band_info = self.bands_info[band.lower()]
             except KeyError as ke:
                 raise KeyError(
-                    f"Please use only the bands {self.all.groups.keys}!"
+                    f"Please use only the bands {self.available_filters()}!"
                 ) from ke
 
             field = self[band]
@@ -313,7 +324,8 @@ class GeneralLightcurve(BaseLightcurve):
             ax = super()._plot_band_folded(
                 time=field["TIME_BARY"],
                 period=period,
-                t0=np.max(self.all(field["TIME_BARY"])),
+                t0=ephemeris if ephemeris is not None else np.max(
+                    self.all["TIME_BARY"]),
                 flux=flux,
                 fluxerr=yerr,
                 ax=ax,
@@ -414,7 +426,7 @@ class GeneralLightcurve(BaseLightcurve):
         ax = super()._verify_ax(ax)
 
         if bands == "":
-            bands = self.all.groups.keys
+            bands = self.available_filters()
 
         for band in bands:
             try:
@@ -422,7 +434,7 @@ class GeneralLightcurve(BaseLightcurve):
                 d = self.bands_info[band.lower()]
             except KeyError as ke:
                 raise KeyError(
-                    f"Please use only the bands in {self.all.groups.keys}"
+                    f"Please use only the bands in {self.available_filters()}"
                 ) from ke
 
             field = self[band]
@@ -434,7 +446,7 @@ class GeneralLightcurve(BaseLightcurve):
                 fluxerr=yerr,
                 ax=ax,
                 color=d["color"],
-                label_prefix=band
+                label_prefix=band,
                 ** plot_kwargs
             )
 
@@ -489,13 +501,13 @@ class GeneralLightcurve(BaseLightcurve):
             KeyError; If Filter ID is not included in table.
         """
 
-        for group_id, key in enumerate(self.all.groups.keys):
+        for group_id, key in enumerate(self.available_filters()):
             if key[0] == filter_id:
                 return self.all.groups[group_id]
 
         raise KeyError(
             f"Filter `{filter_id}` is not available. "
-            + f"Available filters are: {[i[0] for i in self.all.groups.keys]}"
+            + f"Available filters are: {self.available_filters()}"
         )
 
     def flux_statistics(
@@ -518,3 +530,17 @@ class GeneralLightcurve(BaseLightcurve):
         """
         band_data = self[band]
         return statistics(band_data["BRIGHTNESS"]), statistics(band_data["BRIGHTNESS_UNC"])
+
+    def available_filters(self) -> tuple[str]:
+        """
+        Returns the names of filters available for that light curve.
+
+        Returns:
+        --------
+
+            list_filters: tuple[str]; Names of filters the light curve has data
+                for. In the case that no filters are available (how?) an empty
+                tuple is returned.
+        """
+
+        return (filter[0] for filter in self.all.groups.keys)

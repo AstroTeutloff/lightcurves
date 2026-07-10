@@ -64,10 +64,18 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
 
         lc_data = QTable(lc_data, masked=True)
 
+        # Time values can be nan. We omit them from the table here.
+        mask_G = np.isnan(lc_data["TimeG"])
+        mask_BP = np.isnan(lc_data["TimeBP"])
+        mask_RP = np.isnan(lc_data["TimeRP"])
+
+        # Logical or of all masks and apply the inverse to only take values where all times are not nan.
+        lc_data = lc_data[~(mask_G+mask_BP + mask_RP)]
+
         self.all = lc_data
 
-        # Sigma clip the data, if wished.
         for band in GaiaEpPhotLightcurve.FILTERS:
+            # Sigma clip the data, if wished.
             data = self.all[f"F{band}"]
             if sig_clip is not None:
                 sc = sigma_clip(
@@ -77,6 +85,9 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
                 self.all[f"Time{band}"][sc.mask] = np.ma.masked
                 self.all[f"F{band}"][sc.mask] = np.ma.masked
                 self.all[f"e_F{band}"][sc.mask] = np.ma.masked
+
+            # Mask data where Time{band} is NAN
+            # TODO: this
 
         self.all["FG"].unit = GaiaEpPhotLightcurve.FLUX_UNIT
         self.all["e_FG"].unit = GaiaEpPhotLightcurve.FLUX_UNIT
@@ -232,6 +243,7 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
     def plot_folded(
         self,
         period: u.Quantity,
+        ephemeris: t.Time | None = None,
         bands: list | str = ["G", "BP", "RP"],
         ax: axes.Axes | None = None,
         show_uncertainty: bool = False,
@@ -249,6 +261,9 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
 
             period: u.Quantity; A period over which the curve is to be
                 phasefolded over.
+            ephemeris: t.Time; (optional) An ephemeris (T_0) zerophase for the
+                phasefold. Default is `None`, then the latest datapoint is
+                taken as the ephemeris.
             bands: list[str] | str; (optional) List of bands that are to be plotted.
             Options are `G`, `BP`, and `RP`.
                 Alternatively, a string can be used. Syntax is the same, without
@@ -313,7 +328,8 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
             ax = super()._plot_band_folded(
                 time=field[f"Time{band}"],
                 period=period,
-                t0=np.max(self.all["TimeG"]),
+                t0=ephemeris if ephemeris is not None else np.max(
+                    self.all["TimeG"]),
                 flux=flux,
                 fluxerr=yerr,
                 ax=ax,
@@ -547,3 +563,17 @@ class GaiaEpPhotLightcurve(BaseLightcurve):
         """
         band_data = self[band]
         return statistics(band_data[f"F{band}"]), statistics(band_data[f"e_F{band}"])
+
+    def available_filters(self) -> tuple[str]:
+        """
+        Returns the names of filters available for that light curve.
+
+        Returns:
+        --------
+
+            list_filters: tuple[str]; Names of filters the light curve has data
+                for. In the case that no filters are available (how?) an empty
+                tuple is returned.
+        """
+
+        return ("G", "BP", "RP")

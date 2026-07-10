@@ -177,6 +177,7 @@ class ZTFLightcurve(BaseLightcurve):
     def plot_folded(
         self,
         period: u.Quantity,
+        ephemeris: t.Time | None = None,
         bands: list | str = ["zg", "zr", "zi"],
         ax: axes.Axes | None = None,
         show_uncertainty: bool = False,
@@ -194,6 +195,9 @@ class ZTFLightcurve(BaseLightcurve):
 
             period: u.Quantity; A period over which the curve is to be
                 phasefolded over.
+            ephemeris: t.Time; (optional) An ephemeris (T_0) zerophase for the
+                phasefold. Default is `None`, then the latest datapoint is
+                taken as the ephemeris.
             bands: list[str] | str; (optional) List of bands that are to be plotted.
                 Syntax is `zg` for ZTF-G, `zr` for ZTF-R, and `zi` for ZTF-I.
             Alternatively, a string can be used. Syntax is the same, without
@@ -247,7 +251,8 @@ class ZTFLightcurve(BaseLightcurve):
             ax = super()._plot_band_folded(
                 time=field["bjd"],
                 period=period,
-                t0=np.max(self.all["bjd"]),
+                t0=ephemeris if ephemeris is not None else np.max(
+                    self.all["bjd"]),
                 flux=mag_app,
                 fluxerr=yerr,
                 ax=ax,
@@ -444,7 +449,7 @@ class ZTFLightcurve(BaseLightcurve):
                 return self.all.groups[group_id]
 
         raise KeyError(
-            f"Filter `{filter_id}` is not available. Available filters are: {[i[0] for i in self.all.groups.keys]}"
+            f"Filter `{filter_id}` is not available. Available filters are: {self.available_filters()}"
         )
 
     def flux_statistics(
@@ -467,3 +472,17 @@ class ZTFLightcurve(BaseLightcurve):
         """
         band_data = self[band]
         return statistics(band_data["mag"]), statistics(band_data["magerr"])
+
+    def available_filters(self) -> tuple[str]:
+        """
+        Returns the names of filters available for that light curve.
+
+        Returns:
+        --------
+
+            list_filters: tuple[str]; Names of filters the light curve has data
+                for. In the case that no filters are available (how?) an empty
+                tuple is returned.
+        """
+
+        return (filter[0] for filter in self.all.groups.keys)

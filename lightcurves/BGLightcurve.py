@@ -187,6 +187,7 @@ class BGLightcurve(BaseLightcurve):
     def plot_folded(
         self,
         period: u.Quantity,
+        ephemeris: t.Time | None = None,
         bands: list | str = ["u", "g", "q", "r", "i", "z"],
         ax: axes.Axes | None = None,
         show_uncertainty: bool = False,
@@ -204,6 +205,9 @@ class BGLightcurve(BaseLightcurve):
 
             period: u.Quantity; A period over which the curve is to be
                 phasefolded over.
+            ephemeris: t.Time; (optional) An ephemeris (T_0) zerophase for the
+                phasefold. Default is `None`, then the latest datapoint is
+                taken as the ephemeris.
             bands: list[str] | str; (optional) List of bands that are to be plotted.
                 Options are `u`, `g`, `q`, `r`, `i`, `z`.
                 Alternatively, a string can be used. Syntax is the same, without
@@ -254,7 +258,8 @@ class BGLightcurve(BaseLightcurve):
             ax = super()._plot_band_folded(
                 time=field["BJD_OBS"],
                 period=period,
-                t0=np.max(self.all["BJD_OBS"]),
+                t0=ephemeris if ephemeris is not None else np.max(
+                    self.all["BJD_OBS"]),
                 flux=flux,
                 fluxerr=yerr,
                 ax=ax,
@@ -440,7 +445,7 @@ class BGLightcurve(BaseLightcurve):
 
         raise KeyError(
             f"Filter `{filter_id}` is not available. "
-            + f"Available filters are: {[i[0] for i in self.all.groups.keys]}"
+            + f"Available filters are: {self.available_filters()}"
         )
 
     def flux_statistics(
@@ -462,4 +467,24 @@ class BGLightcurve(BaseLightcurve):
                 one for the flux errors.
         """
         band_data = self[band]
-        return statistics(band_data["FNU_OPT"]), statistics(band_data["FNUERR_OPT"])
+        flux_stats = statistics(band_data["FNU_OPT"])
+        fluxerr_stats = statistics(band_data["FNUERRTOT_OPT"])
+        chi_square = np.sum(
+            ((band_data["FNU_OPT"] - flux_stats.mean) /
+             band_data["FNUERRTOT_OPT"])**2
+        )
+        return flux_stats, fluxerr_stats, chi_square
+
+    def available_filters(self) -> tuple[str]:
+        """
+        Returns the names of filters available for that light curve.
+
+        Returns:
+        --------
+
+            list_filters: tuple[str]; Names of filters the light curve has data
+                for. In the case that no filters are available (how?) an empty
+                tuple is returned.
+        """
+
+        return (filter[0] for filter in self.all.groups.keys)

@@ -8,7 +8,7 @@ with open("README.md", "r") as f:
 
 setup(
     name="lightcurves",
-    version="0.1.0",
+    version="0.1.1",
     include_package_data=True,
     python_requires=">=3.10",
     packages=find_packages(),

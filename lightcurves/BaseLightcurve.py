@@ -50,6 +50,10 @@ class BaseLightcurve(ABC):
     ) -> (statistics, statistics):
         pass
 
+    @abstractmethod
+    def available_filters(self) -> tuple[str]:
+        pass
+
     @classmethod
     @abstractmethod
     def lomb_scargle(cls, data: QTable, **ls_kwargs) -> LombScargle:
@@ -176,6 +180,7 @@ class BaseLightcurve(ABC):
     def plot_folded(
         self,
         period: u.Quantity,
+        ephemeris: t.Time | None = None,
         bands: list | str = "",
         ax: axes.Axes | None = None,
         show_uncertainty: bool = False,
